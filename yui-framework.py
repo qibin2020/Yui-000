@@ -36,83 +36,100 @@ class Pipe:
         Configuration for the pipe
         """
         MODEL_API_BASE_URL: str = Field(
-            default="https://aiapi001.ihep.ac.cn/apiv2",
+            default=os.getenv("YUI_MODEL_API_BASE_URL", "https://aiapi001.ihep.ac.cn/apiv2"),
             description="语言模型API的基础请求地址",
         )
         MODEL_API_KEY: str = Field(
-            default="api key here", description="用于身份验证的API密钥"
+            default=os.getenv("YUI_MODEL_API_KEY", "api key here"),
+            description="用于身份验证的API密钥",
         )
         TASK_MODEL_API_BASE_URL: str = Field(
-            default="https://aiapi001.ihep.ac.cn/apiv2",
+            default=os.getenv("YUI_TASK_MODEL_API_BASE_URL", "https://aiapi001.ihep.ac.cn/apiv2"),
             description="语言模型API的基础请求地址",
         )
         TASK_MODEL_API_KEY: str = Field(
-            default="api key here", description="用于身份验证的API密钥"
+            default=os.getenv("YUI_TASK_MODEL_API_KEY", "api key here"),
+            description="用于身份验证的API密钥",
         )
         BASE_MODEL: str = Field(
-            default="deepseek-ai/deepseek-r1:671b",
+            default=os.getenv("YUI_BASE_MODEL", "deepseek-ai/deepseek-r1:671b"),
             description="对话的模型名称",
         )
         TASK_MODEL: str = Field(
-            default="deepseek-ai/deepseek-v3:671b",
+            default=os.getenv("YUI_TASK_MODEL", "deepseek-ai/deepseek-v3:671b"),
             description="用于提取搜索提示词等的模型名称",
         )
         VISION_MODEL: str = Field(
-            default="ark/doubao-vision-pro",
+            default=os.getenv("YUI_VISION_MODEL", "ark/doubao-vision-pro"),
             description="用语解析图片内容",
         )
         EMBEDDING_API_BASE_URL: str = Field(
-            default="http://127.0.0.1:11434/v1",
+            default=os.getenv("YUI_EMBEDDING_API_BASE_URL", "http://127.0.0.1:11434/v1"),
             description="文本嵌入API的基础请求地址",
         )
         EMBEDDING_API_KEY: str = Field(
-            default="api key here", description="用于身份验证的API密钥"
+            default=os.getenv("YUI_EMBEDDING_API_KEY", "api key here"),
+            description="用于身份验证的API密钥",
         )
         EMBEDDING_MODEL: str = Field(
-            default="bge-m3:latest",
+            default=os.getenv("YUI_EMBEDDING_MODEL", "bge-m3:latest"),
             description="用于获取文本嵌入的模型名称",
         )
-        # RAG配置
         REALTIME_RAG: bool = Field(
-            default=True, description="Realtime seaching Vector DB"
+            default=bool(int(os.getenv("YUI_REALTIME_RAG", "1"))),
+            description="Realtime seaching Vector DB",
         )
         GENERATE_KEYWORDS_FROM_MODEL: bool = Field(
-            default=True, description="Generate keywords from model"
+            default=bool(int(os.getenv("YUI_GENERATE_KEYWORDS_FROM_MODEL", "1"))),
+            description="Generate keywords from model",
         )
-        RAG_COLLECTION_NAMES: str = Field(default="Yui-000-Source, Open WebUI Backend")
+        RAG_COLLECTION_NAMES: str = Field(
+            default=os.getenv("YUI_RAG_COLLECTION_NAMES", "Yui-000-Source, Open WebUI Backend"),
+        )
         EMBEDDING_BATCH_SIZE: int = Field(
-            default=2000,
+            default=int(os.getenv("YUI_EMBEDDING_BATCH_SIZE", "2000")),
             description="Batch size for RAG",
         )
-        # 环境交互配置
         REALTIME_IO: bool = Field(
-            default=True,
+            default=bool(int(os.getenv("YUI_REALTIME_IO", "1"))),
             description="Realtime Interact with environment and sense environment change",
         )
-        # 提示词配置
-        USE_DARKSHINE_GUIDE: bool = Field(default=True, title="Use DarkSHINE Guide")
-        USE_BESIII_GUIDE: bool = Field(default=False, title="Use BESIII Guide")
-        # 工具配置
-        USE_CODE_INTERFACE: bool = Field(default=True)
-        USE_WEB_SEARCH: bool = Field(default=True)
-        USE_MAPPING: bool = Field(default=False)
+        USE_DARKSHINE_GUIDE: bool = Field(
+            default=bool(int(os.getenv("YUI_USE_DARKSHINE_GUIDE", "1"))),
+            title="Use DarkSHINE Guide",
+        )
+        USE_BESIII_GUIDE: bool = Field(
+            default=bool(int(os.getenv("YUI_USE_BESIII_GUIDE", "0"))),
+            title="Use BESIII Guide",
+        )
+        USE_CODE_INTERFACE: bool = Field(
+            default=bool(int(os.getenv("YUI_USE_CODE_INTERFACE", "1"))),
+        )
+        USE_WEB_SEARCH: bool = Field(
+            default=bool(int(os.getenv("YUI_USE_WEB_SEARCH", "1"))),
+        )
+        USE_MAPPING: bool = Field(
+            default=bool(int(os.getenv("YUI_USE_MAPPING", "0"))),
+        )
         CODE_WORKER_NAME: str = Field(
-            default="xuliang/code-worker-v2",
+            default=os.getenv("YUI_CODE_WORKER_NAME", "xuliang/code-worker-v2"),
             description="Code worker model name",
         )
         CODE_WORKER_BASE_URL: str = Field(
-            default="http://localhost:42899/apiv2",
+            default=os.getenv("YUI_CODE_WORKER_BASE_URL", "http://localhost:42899/apiv2"),
             description="Code worker API base URL",
         )
         GOOGLE_PSE_API_KEY: str = Field(
-            default="api key here", title="Google PSE API Key"
+            default=os.getenv("YUI_GOOGLE_PSE_API_KEY", "api key here"),
+            title="Google PSE API Key",
         )
         GOOGLE_PSE_ENGINE_ID: str = Field(
-            default="id here", title="Google PSE Engine ID"
+            default=os.getenv("YUI_GOOGLE_PSE_ENGINE_ID", "id here"),
+            title="Google PSE Engine ID",
         )
-        # 其他配置
         MAX_LOOP: int = Field(
-            default=20, description="Prevent dead loop, 0 for unlimited."
+            default=int(os.getenv("YUI_MAX_LOOP", "20")),
+            description="Prevent dead loop, 0 for unlimited.",
         )
 
     def __init__(self):
