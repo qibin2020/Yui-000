@@ -131,6 +131,10 @@ class Pipe:
             default=int(os.getenv("YUI_MAX_LOOP", "20")),
             description="Prevent dead loop, 0 for unlimited.",
         )
+        THIRD_PARTY_BASE_PATH: str = Field(
+            default=os.getenv("YUI_THIRD_PARTY_BASE_PATH", "~/third_party"),
+            title="Base path to third-party utils, tools, so on.",
+        )
 
     def __init__(self):
         # Shared Configs
@@ -190,7 +194,7 @@ class Pipe:
 
             if not assistant_code_block:
                 log.warning("Fallback to load from default_interface.py")
-                default_interface_path = os.path.expanduser("~/third_party/assistant_utils/default_interface.py")
+                default_interface_path = os.path.expanduser(f"{self.valves.THIRD_PARTY_BASE_PATH}/assistant_utils/default_interface.py")
                 if os.path.exists(default_interface_path):
                     with open(default_interface_path, 'r') as file:
                         assistant_code_block = file.read()

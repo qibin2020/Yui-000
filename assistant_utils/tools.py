@@ -13,6 +13,8 @@ from jinja2 import Template
 from datetime import datetime
 from dataclasses import dataclass
 from open_webui.retrieval.vector.connector import VECTOR_DB_CLIENT
+from fastmcp import Client
+from fastmcp.client.transports import SSETransport
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from prompt import (
@@ -39,6 +41,192 @@ class VectorDBResultObject:
     metadata: Dict
     query_embedding: List
 
+class SimpleCodeWorker:
+    def __init__(self, base_url: str, name : str = "temp", image: str = "", timeout=None):
+        """
+        :param base_url: URL of the MCP SSE endpoint (e.g., "http://localhost:1234/sse").
+        :param image: Docker image to initialize the sandbox with.
+        :param timeout: Default timeout for everythin (sesssion, http, sse) if not specified per-call.
+        """
+        self.base_url = base_url
+        self.image = image
+        self.timeout = timeout if timeout else 60 * 5
+        self.container_id = None
+        self.name=name
+    
+    def to_delta(self,sec=None):
+        return datetime.timedelta(seconds=sec if sec else self.timeout)
+
+    async def initialize(self) -> str:
+        """
+        Asynchronously creates a new sandbox container and stores its ID.
+        """
+        try:
+            async with Client(
+                SSETransport(self.base_url),
+                read_timeout_seconds=self.to_delta(self.timeout)
+            ) as client:
+                await client.ping()
+                if self.image=="":
+                    ret = await client.call_tool(
+                        "sandbox_initialize",
+                        {"name": self.name}
+                    )
+                else:
+                    ret = await client.call_tool(
+                        "sandbox_initialize",
+                        {"image": self.image,
+                        "name": self.name}
+                    )
+                # parse response like "container_id:abc123,foo:bar"
+            info = {
+                pair.split(":", 1)[0]: pair.split(":", 1)[1]
+                for pair in ret[0].text.split(",") if pair.strip()
+            }
+            self.container_id = info.get("container_id",None)
+            if self.container_id is None:
+                info_str = json.dumps(info, indent=2)
+                raise RuntimeError(f"Container initialization failed:\n{info_str}")
+        except Exception as e:
+            log.error(f"init code worker !error: {e}",exc_info=True)
+        return self.container_id
+
+    async def kill(self) -> str:
+        """
+        Asynchronously kill sandbox container.
+        """
+        try:
+            async with Client(
+                SSETransport(self.base_url),
+                read_timeout_seconds=self.to_delta(self.timeout)
+            ) as client:
+                await client.ping()
+                ret = await client.call_tool(
+                        "sandbox_stop",
+                        {"container_id": self.container_id}
+                    )
+        except Exception as e:
+            log.error(f"kill code worker !error: {e}",exc_info=True)
+        return self.container_id
+
+    async def write_code(
+        self,
+        file_path: str,
+        content: str,
+        execute: bool = False,
+        lang: str = None,
+        timeout=None
+    ) -> str:
+        log.info(f"code worker: write_code {file_path},{content},{execute},{lang},{self.container_id}")
+        """
+        Writes content to a file inside the sandbox (via write_file_sandbox),
+        or if execute=True, also runs it (via sandbox_exec).
+        Uses per-call timeout if provided, otherwise falls back to self.timeout.
+        """
+        # ensure we have a sandbox
+        if not self.container_id:
+            await self.initialize()
+
+        # determine effective timeout
+        eff_timeout = timeout if timeout else self.timeout
+
+        if execute:
+            # prepare commands
+            write_cmd = f"cat << 'EOF' > {file_path}\n{content}\nEOF"
+            if lang == "bash":
+                exec_cmd = f"bash {file_path}"
+            elif lang == "python" or file_path.endswith('.py'):
+                exec_cmd = f"python {file_path}"
+            else:
+                exec_cmd = f"chmod +x {file_path} && {file_path}"
+
+            async with Client(
+                SSETransport(self.base_url),
+                read_timeout_seconds=self.to_delta(eff_timeout)
+            ) as client:
+                await client.ping()
+                # write the file
+                await client.call_tool(
+                    "write_file_sandbox",
+                    {
+                        "container_id": self.container_id,
+                        "file_name": file_path,
+                        "file_contents": content
+                    }
+                )
+                # execute it
+                ret = await client.call_tool(
+                    "sandbox_exec",
+                    {
+                        "container_id": self.container_id,
+                        "commands": [exec_cmd]
+                    }
+                )
+            return "\n".join(msg.text for msg in ret)
+
+        # only write without executing
+        async with Client(
+            SSETransport(self.base_url),
+            read_timeout_seconds=self.to_delta(eff_timeout)
+        ) as client:
+            await client.ping()
+            ret = await client.call_tool(
+                "write_file_sandbox",
+                {
+                    "container_id": self.container_id,
+                    "file_name": file_path,
+                    "file_contents": content
+                }
+            )
+        return ret[0].text
+
+    async def run_command(
+        self,
+        command: str,
+        timeout=None
+    ) -> str:
+        """
+        Executes a single shell command inside the sandbox via sandbox_exec.
+        Uses per-call timeout if provided, otherwise falls back to self.read_timeout.
+        """
+        log.info(f"code worker: run_command {command},{self.container_id}")
+        if not self.container_id:
+            await self.initialize()
+
+        # determine effective timeout
+        eff_timeout = timeout if timeout else self.timeout
+
+        async with Client(
+            SSETransport(self.base_url),
+            read_timeout_seconds=self.to_delta(eff_timeout)
+        ) as client:
+            await client.ping()
+            ret = await client.call_tool(
+                "sandbox_exec",
+                {
+                    "container_id": self.container_id,
+                    "commands": [command]
+                }
+            )
+        return "\n".join(msg.text for msg in ret)
+
+    async def search_replace(
+        self,
+        file_path: str,
+        original: str,
+        updated: str,
+        timeout=None,
+    ) -> str:
+        log.info(f"code worker: search_replace {file_path},{original},{updated},{self.container_id}")
+        """
+        Performs an in-place search-and-replace using `sed -i` via sandbox_exec.
+        Accepts an optional timeout to override the default.
+        """
+        # escape single quotes for shell safety
+        orig_esc = original.replace("'", "'\\''")
+        upd_esc = updated.replace("'", "'\\''")
+        sed_cmd = f"sed -i 's/{orig_esc}/{upd_esc}/g' {file_path}"
+        return await self.run_command(sed_cmd, timeout=timeout)
 
 class ManagedThread(threading.Thread):
     """
