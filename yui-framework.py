@@ -20,6 +20,15 @@ from datetime import datetime
 log = logging.getLogger(__name__)
 log.setLevel("DEBUG")
 
+class LookingGlass(logging.Handler):
+    def emit(self, record):
+        yield f"<log_assistant_core>\n```log\n{self.format(record)}\n```\n<log_assistant_core>"
+
+glass_handler = LookingGlass()
+glass_handler.setLevel(logging.ERROR)
+glass_handler.setFormatter(logging.Formatter("%(message)s"))  # Customize as needed
+
+log.addHandler(glass_handler)
 
 class Pipe:
     class Valves(BaseModel):
