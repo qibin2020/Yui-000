@@ -11,6 +11,7 @@ import threading
 from queue import Queue
 from jinja2 import Template
 from datetime import datetime
+from datetime import timedelta
 from dataclasses import dataclass
 from open_webui.retrieval.vector.connector import VECTOR_DB_CLIENT
 from fastmcp import Client
@@ -55,7 +56,7 @@ class SimpleCodeWorker:
         self.name=name
     
     def to_delta(self,sec=None):
-        return datetime.timedelta(seconds=sec if sec else self.timeout)
+        return timedelta(seconds=sec if sec else self.timeout)
 
     async def initialize(self) -> str:
         """
