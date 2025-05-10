@@ -157,6 +157,8 @@ class Pipe:
         if not self.valves.MODEL_API_KEY:
             yield json.dumps({"error": "未配置API密钥"}, ensure_ascii=False)
             return
+        # Append the thrid party (to easily import in body)
+        sys.path.append(os.path.expanduser(self.valves.THIRD_PARTY_BASE_PATH))
         # 准备请求参数
         headers = {
             "Authorization": f"Bearer {self.valves.MODEL_API_KEY}",
@@ -243,6 +245,7 @@ class Pipe:
                 yield result
 
         except Exception as e:
+            log.error(f"Yui-Framework-Error: {e}", exc_info=True)
             yield self._format_error("Yui-Framework-Error", str(e))
         
     def _format_error(self, status_code: int, error: bytes) -> str:
