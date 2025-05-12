@@ -147,10 +147,10 @@ class SimpleCodeWorker:
                     "file_contents": content
                 }
             )
-        if not excute:
+        if not execute:
             return ret[0].text
         
-        # excute
+        # execute
         if lang == "bash":
             exec_cmd = f"bash {file_path}"
         elif lang == "python" or file_path.endswith('.py'):
