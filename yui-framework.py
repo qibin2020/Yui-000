@@ -61,7 +61,7 @@ class Pipe:
         )
         VISION_MODEL: str = Field(
             default=os.getenv("YUI_VISION_MODEL", "ark/doubao-vision-pro"),
-            description="用语解析图片内容",
+            description="用于解析图片内容",
         )
         EMBEDDING_API_BASE_URL: str = Field(
             default=os.getenv("YUI_EMBEDDING_API_BASE_URL", "http://127.0.0.1:11434/v1"),
@@ -118,6 +118,10 @@ class Pipe:
         CODE_WORKER_BASE_URL: str = Field(
             default=os.getenv("YUI_CODE_WORKER_BASE_URL", "http://localhost:42899/apiv2"),
             description="Code worker API base URL",
+        )
+        FILE_HOLDER_URL: str = Field(
+            default=os.getenv("YUI_FILE_HOLDER_URL", "http://cheshire-cache:5678"),
+            description="File Holdr URL",
         )
         GOOGLE_PSE_API_KEY: str = Field(
             default=os.getenv("YUI_GOOGLE_PSE_API_KEY", "api key here"),

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from open_webui.retrieval.vector.connector import VECTOR_DB_CLIENT
 from fastmcp import Client
 from fastmcp.client.transports import SSETransport
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from prompt import (
@@ -43,7 +44,7 @@ class VectorDBResultObject:
     query_embedding: List
 
 class SimpleCodeWorker:
-    def __init__(self, base_url: str, name : str = "temp", image: str = "", timeout=None):
+    def __init__(self, base_url: str, name : str = "temp", image: str = "", timeout=None, file_holder : str = ""):
         """
         :param base_url: URL of the MCP SSE endpoint (e.g., "http://localhost:1234/sse").
         :param image: Docker image to initialize the sandbox with.
@@ -54,6 +55,7 @@ class SimpleCodeWorker:
         self.timeout = timeout if timeout else 60 * 5
         self.container_id = None
         self.name=name
+        self.file_holder = file_holder
     
     def to_delta(self,sec=None):
         return timedelta(seconds=sec if sec else self.timeout)
@@ -131,41 +133,7 @@ class SimpleCodeWorker:
         # determine effective timeout
         eff_timeout = timeout if timeout else self.timeout
 
-        if execute:
-            # prepare commands
-            write_cmd = f"cat << 'EOF' > {file_path}\n{content}\nEOF"
-            if lang == "bash":
-                exec_cmd = f"bash {file_path}"
-            elif lang == "python" or file_path.endswith('.py'):
-                exec_cmd = f"python {file_path}"
-            else:
-                exec_cmd = f"chmod +x {file_path} && {file_path}"
-
-            async with Client(
-                SSETransport(self.base_url),
-                read_timeout_seconds=self.to_delta(eff_timeout)
-            ) as client:
-                await client.ping()
-                # write the file
-                await client.call_tool(
-                    "write_file_sandbox",
-                    {
-                        "container_id": self.container_id,
-                        "file_name": file_path,
-                        "file_contents": content
-                    }
-                )
-                # execute it
-                ret = await client.call_tool(
-                    "sandbox_exec",
-                    {
-                        "container_id": self.container_id,
-                        "commands": [exec_cmd]
-                    }
-                )
-            return "\n".join(msg.text for msg in ret)
-
-        # only write without executing
+        # upload file
         async with Client(
             SSETransport(self.base_url),
             read_timeout_seconds=self.to_delta(eff_timeout)
@@ -179,7 +147,18 @@ class SimpleCodeWorker:
                     "file_contents": content
                 }
             )
-        return ret[0].text
+        if not excute:
+            return ret[0].text
+        
+        # excute
+        if lang == "bash":
+            exec_cmd = f"bash {file_path}"
+        elif lang == "python" or file_path.endswith('.py'):
+            exec_cmd = f"python {file_path}"
+        else:
+            exec_cmd = f"chmod +x {file_path} && {file_path}"
+
+        return await self.run_command(command=exec_cmd,timeout=timeout)
 
     async def run_command(
         self,
@@ -209,7 +188,11 @@ class SimpleCodeWorker:
                     "commands": [command]
                 }
             )
-        return "\n".join(msg.text for msg in ret)
+        return_text="\n".join(msg.text for msg in ret)
+        if self.file_holder:
+            return await self.process_upload(text=return_text,timeout=timeout)
+
+        return return_text
 
     async def search_replace(
         self,
@@ -228,6 +211,55 @@ class SimpleCodeWorker:
         upd_esc = updated.replace("'", "'\\''")
         sed_cmd = f"sed -i 's/{orig_esc}/{upd_esc}/g' {file_path}"
         return await self.run_command(sed_cmd, timeout=timeout)
+
+    async def process_upload(
+        self,
+        text: str,
+        timeout=None,
+        ) -> str:
+        """
+        Find substrings like foo.png, images/bar.jpg, ../baz.gif, upload each via
+        `await self.run_command(...)`, and replace each occurrence with the returned URL.
+        """
+        if self.file_holder is None or len(self.file_holder)==0:
+            return text
+        # Match optional ./ or ../ plus word, dash, underscore, slash, dot, ending with our extensions
+        pattern = r'(?P<fname>(?:\.\.?/)?[\w\-/\.]+\.(?:jpg|jpeg|png|gif|bmp|tiff|tif|webp|svg))'
+        seen = set()
+
+        for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+            fname = m.group("fname")
+            if fname in seen:
+                continue
+            seen.add(fname)
+
+            p = Path(fname)
+            if not p.is_file():
+                # file doesn’t exist relative to cwd, skip
+                continue
+            
+            log.info(f"Found file to upload {fname}")
+
+            # build the curl command (quoted)
+            cmd = (
+                f"curl -s -F file=@{shlex.quote(str(p))} "
+                f"{shlex.quote(self.file_holder)}/upload"
+            )
+            raw = await self.run_command(cmd, timeout)
+
+            # parse response
+            try:
+                url = json.loads(raw)["url"]
+            except (ValueError, KeyError):
+                log.error(f"Upload failed {cmd} --> {raw}")
+                continue
+
+            image_encode=f" ![img]({url}) "
+
+            # replace every literal occurrence of fname in the text
+            text = re.sub(re.escape(fname), image_encode, text)
+
+        return text 
 
 class ManagedThread(threading.Thread):
     """
