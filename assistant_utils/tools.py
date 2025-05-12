@@ -226,7 +226,6 @@ class SimpleCodeWorker:
         remote_files=[]
 
         for fname in local_files:
-            fname = m.group("fname")
             if fname in seen:
                 continue
             seen.add(fname)
