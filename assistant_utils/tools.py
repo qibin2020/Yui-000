@@ -243,8 +243,8 @@ class SimpleCodeWorker:
 
             # build the curl command (quoted)
             cmd = (
-                f"apt-get update && "
-                f"apt-get install -y --no-install-recommends curl && "
+                "apt-get update -qq >/dev/null 2>&1 && "
+                "apt-get install -y --no-install-recommends curl >/dev/null 2>&1 && "
                 f"curl -s -F file=@{shlex.quote(str(p))} "
                 f"{shlex.quote(holder_inside)}/upload"
             )
