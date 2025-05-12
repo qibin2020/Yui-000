@@ -101,6 +101,7 @@ class SimpleCodeWorker:
         """
         Asynchronously kill sandbox container.
         """
+        log.info(f"code worker: destroy {self.container_id}")
         try:
             async with Client(
                 SSETransport(self.base_url),
@@ -220,6 +221,7 @@ class SimpleCodeWorker:
         For each local file, upload and return the remote link
         """
         if self.file_holder is None or len(self.file_holder)==0:
+            log.info("No file_holder...")
             return local_files
 
         seen = set()
@@ -231,14 +233,12 @@ class SimpleCodeWorker:
             seen.add(fname)
 
             p = Path(fname)
-            if not p.is_file():
-                # file doesn’t exist relative to cwd, skip
-                continue
-            
             log.info(f"Found file to upload {fname}")
 
             # build the curl command (quoted)
             cmd = (
+                f"apt-get update && "
+                f"apt-get install -y --no-install-recommends curl && "
                 f"curl -s -F file=@{shlex.quote(str(p))} "
                 f"{shlex.quote(self.file_holder)}/upload"
             )
