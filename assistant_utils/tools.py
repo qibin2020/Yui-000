@@ -125,7 +125,7 @@ class SimpleCodeWorker:
         lang: str = None,
         timeout=None
         ) -> str:
-        log.info(f"code worker: write_code {file_path},{content},{execute},{lang},{self.container_id}")
+        log.debug(f"code worker: write_code {file_path},{content},{execute},{lang},{self.container_id}")
         """
         Writes content to a file inside the sandbox (via write_file_sandbox),
         or if execute=True, also runs it (via sandbox_exec).
@@ -174,7 +174,7 @@ class SimpleCodeWorker:
         Executes a single shell command inside the sandbox via sandbox_exec.
         Uses per-call timeout if provided, otherwise falls back to self.read_timeout.
         """
-        log.info(f"code worker: run_command {command},{self.container_id}")
+        log.debug(f"code worker: run_command {command},{self.container_id}")
         if not self.container_id:
             await self.initialize()
 
@@ -202,7 +202,7 @@ class SimpleCodeWorker:
         updated: str,
         timeout=None,
         ) -> str:
-        log.info(f"code worker: search_replace {file_path},{original},{updated},{self.container_id}")
+        log.debug(f"code worker: search_replace {file_path},{original},{updated},{self.container_id}")
         """
         Performs an in-place search-and-replace using `sed -i` via sandbox_exec.
         Accepts an optional timeout to override the default.
@@ -249,12 +249,13 @@ class SimpleCodeWorker:
                 f"{shlex.quote(holder_inside)}/upload"
             )
             raw = await self.run_command(cmd, timeout)
+            output = raw.split("\n")[-2]
 
             # parse response
             try:
-                url = json.loads(raw)["url"]
+                url = json.loads(output)["url"]
             except (ValueError, KeyError):
-                log.error(f"Upload failed {cmd} --> {raw}")
+                log.error(f"Upload failed {cmd} --> {output}")
                 continue
 
             remote_files.append(url.replace(holder_inside,self.file_holder))
@@ -657,6 +658,7 @@ async def generate_vl_response(
     model: str,
     url: str,
     key: str,
+    GPT_mode: bool = False,
 ) -> str:
     try:
         payload = {
@@ -675,17 +677,19 @@ async def generate_vl_response(
                         },
                     ],
                 }
-            ],
-            "stream": False,
-            "max_tokens": 512,
-            "stop": None,
-            "temperature": 0.1,
-            "top_p": 0.5,
-            "top_k": 30,
-            "frequency_penalty": 1.1,
-            "n": 1,
-            "response_format": {"type": "text"},
-        }
+            ],}
+        if not GPT_mode:
+            payload.update({
+                "stream": False,
+                "max_tokens": 512,
+                "stop": None,
+                "temperature": 0.1,
+                "top_p": 0.5,
+                "top_k": 30,
+                "frequency_penalty": 1.1,
+                "n": 1,
+                "response_format": {"type": "text"},
+            })
 
         response = requests.request(
            "POST",
