@@ -17,6 +17,8 @@ from open_webui.retrieval.vector.connector import VECTOR_DB_CLIENT
 from fastmcp import Client
 from fastmcp.client.transports import SSETransport
 from pathlib import Path
+import shlex
+import fnmatch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from prompt import (
@@ -56,6 +58,7 @@ class SimpleCodeWorker:
         self.container_id = None
         self.name=name
         self.file_holder = file_holder
+        self._file_snapshot: Dict[str, float] = {}
     
     def to_delta(self,sec=None):
         return timedelta(seconds=sec if sec else self.timeout)
@@ -119,7 +122,7 @@ class SimpleCodeWorker:
         execute: bool = False,
         lang: str = None,
         timeout=None
-    ) -> str:
+        ) -> str:
         log.info(f"code worker: write_code {file_path},{content},{execute},{lang},{self.container_id}")
         """
         Writes content to a file inside the sandbox (via write_file_sandbox),
@@ -164,7 +167,7 @@ class SimpleCodeWorker:
         self,
         command: str,
         timeout=None
-    ) -> str:
+        ) -> str:
         """
         Executes a single shell command inside the sandbox via sandbox_exec.
         Uses per-call timeout if provided, otherwise falls back to self.read_timeout.
@@ -188,11 +191,7 @@ class SimpleCodeWorker:
                     "commands": [command]
                 }
             )
-        return_text="\n".join(msg.text for msg in ret)
-        if self.file_holder:
-            return await self.process_upload(text=return_text,timeout=timeout)
-
-        return return_text
+        return "\n".join(msg.text for msg in ret)
 
     async def search_replace(
         self,
@@ -200,7 +199,7 @@ class SimpleCodeWorker:
         original: str,
         updated: str,
         timeout=None,
-    ) -> str:
+        ) -> str:
         log.info(f"code worker: search_replace {file_path},{original},{updated},{self.container_id}")
         """
         Performs an in-place search-and-replace using `sed -i` via sandbox_exec.
@@ -212,22 +211,21 @@ class SimpleCodeWorker:
         sed_cmd = f"sed -i 's/{orig_esc}/{upd_esc}/g' {file_path}"
         return await self.run_command(sed_cmd, timeout=timeout)
 
-    async def process_upload(
+    async def to_remote(
         self,
-        text: str,
+        local_files: List[str],
         timeout=None,
         ) -> str:
         """
-        Find substrings like foo.png, images/bar.jpg, ../baz.gif, upload each via
-        `await self.run_command(...)`, and replace each occurrence with the returned URL.
+        For each local file, upload and return the remote link
         """
         if self.file_holder is None or len(self.file_holder)==0:
-            return text
-        # Match optional ./ or ../ plus word, dash, underscore, slash, dot, ending with our extensions
-        pattern = r'(?P<fname>(?:\.\.?/)?[\w\-/\.]+\.(?:jpg|jpeg|png|gif|bmp|tiff|tif|webp|svg))'
-        seen = set()
+            return local_files
 
-        for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+        seen = set()
+        remote_files=[]
+
+        for fname in local_files:
             fname = m.group("fname")
             if fname in seen:
                 continue
@@ -253,13 +251,55 @@ class SimpleCodeWorker:
             except (ValueError, KeyError):
                 log.error(f"Upload failed {cmd} --> {raw}")
                 continue
+            remote_files.append(url)
 
-            image_encode=f" ![img]({url}) "
+        return remote_files 
+   
+    async def scan_files(
+        self,
+        exclude: List[str] = None,
+        timeout=None,
+        ) -> List[str]:
+        """
+        Scan the current working directory inside the sandbox for all files,
+        compare their mtimes to the last snapshot, update the snapshot,
+        and return a list of new or modified file paths.
+        """
+        # find all files with their mtimes
+        find_cmd = "find . -type f -printf '%T@ %P\\n'"
+        raw = await self.run_command(find_cmd,timeout=timeout)
 
-            # replace every literal occurrence of fname in the text
-            text = re.sub(re.escape(fname), image_encode, text)
+        curr: Dict[str, float] = {}
+        for line in raw.strip().splitlines():
+            parts = line.split(" ", 1)
+            if len(parts) != 2:
+                continue
+            ts, path = parts
+            try:
+                curr[path] = float(ts)
+            except ValueError:
+                log.warning(f"Could not parse timestamp on line: {line}")
+                continue
 
-        return text 
+        # detect new or modified files
+        modified = [
+            path
+            for path, mtime in curr.items()
+            if path not in self._file_snapshot or mtime > self._file_snapshot[path]
+        ]
+
+        # update snapshot
+        self._file_snapshot = curr
+
+        # exclude filename...
+        def is_excluded(path: str) -> bool:
+            for pat in exclude:
+                if fnmatch.fnmatch(path, pat):
+                    return True
+            return False
+
+        filtered = [p for p in modified if not is_excluded(p)]
+        return filtered
 
 class ManagedThread(threading.Thread):
     """
