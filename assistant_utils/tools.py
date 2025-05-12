@@ -19,6 +19,7 @@ from fastmcp.client.transports import SSETransport
 from pathlib import Path
 import shlex
 import fnmatch
+from urllib.parse import urlparse, urlunparse
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from prompt import (
@@ -223,6 +224,11 @@ class SimpleCodeWorker:
         if self.file_holder is None or len(self.file_holder)==0:
             log.info("No file_holder...")
             return local_files
+        
+        holder_url = urlparse(self.file_holder)
+        inside_url = f"172.17.0.1:{holder_url.port}" if holder_url.port else "172.17.0.1"
+        holder_inside = urlunparse(holder_url._replace(netloc=inside_url))
+        # now for safe we only allow the outside port mapped to DinD port, then access with docker0
 
         seen = set()
         remote_files=[]
@@ -240,7 +246,7 @@ class SimpleCodeWorker:
                 f"apt-get update && "
                 f"apt-get install -y --no-install-recommends curl && "
                 f"curl -s -F file=@{shlex.quote(str(p))} "
-                f"{shlex.quote(self.file_holder)}/upload"
+                f"{shlex.quote(holder_inside)}/upload"
             )
             raw = await self.run_command(cmd, timeout)
 
@@ -250,8 +256,8 @@ class SimpleCodeWorker:
             except (ValueError, KeyError):
                 log.error(f"Upload failed {cmd} --> {raw}")
                 continue
-            remote_files.append(url)
 
+            remote_files.append(url.replace(holder_inside,self.file_holder))
         return remote_files 
    
     async def scan_files(

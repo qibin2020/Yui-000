@@ -120,7 +120,7 @@ class Pipe:
             description="Code worker API base URL",
         )
         FILE_HOLDER_URL: str = Field(
-            default=os.getenv("YUI_FILE_HOLDER_URL", "http://172.17.0.1:5678"), # ok now host with local file_server, could either run in Rabbit-Hole, or port forwarded. Note the code worker runs DinD
+            default=os.getenv("YUI_FILE_HOLDER_URL", "http://cheshire-cache:5678"), # ok this is the url accsible from OUI
             description="File Holdr URL",
         )
         GOOGLE_PSE_API_KEY: str = Field(
