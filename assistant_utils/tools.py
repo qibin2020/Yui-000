@@ -20,6 +20,8 @@ from pathlib import Path
 import shlex
 import fnmatch
 from urllib.parse import urlparse, urlunparse
+import base64
+from requests.exceptions import RequestException
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from prompt import (
@@ -45,6 +47,27 @@ class VectorDBResultObject:
     document: str
     metadata: Dict
     query_embedding: List
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"}
+def bake_image(url: str) -> str:
+    """
+    Fetches an image from the given URL and returns a data-URI string.
+    """
+    if url.startswith("data:") and ";base64," in url:
+        return url
+
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+    except RequestException:
+        return url
+
+    content_type = resp.headers.get("Content-Type", "")
+    if not content_type.startswith("image/"):
+        return url
+        
+    b64 = base64.b64encode(resp.content).decode("ascii")
+    return f"data:{content_type};base64,{b64}"
 
 class SimpleCodeWorker:
     def __init__(self, base_url: str, name : str = "temp", image: str = "", timeout=None, file_holder : str = ""):
