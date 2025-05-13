@@ -5,7 +5,7 @@
 def DEFAULT_CODE_INTERFACE_PROMPT():
     return """Code Interface
 
-You have access to a user's {{OP_SYSTEM}} computer workspace. You use `<code_interface>` XML tag to write codes to do analysis, calculations, or problem-solving.
+You have access to a user's {{OP_SYSTEM}} computer workspace. You use `<code_interface>\n` XML tag to write codes to do analysis, calculations, or problem-solving.
 
 [example begin]
 
@@ -13,7 +13,7 @@ EXAMPLE INPUT:
 plot something
 
 EXAMPLE OUTPUT:
-<code_interface type="exec" lang="python" filename="plot.py">
+<code_interface type="exec" lang="python" filename="plot.py">\n
 
 ```python
 # plot and save png figure to a relative path
@@ -25,7 +25,7 @@ EXAMPLE INPUT:
 Create and test a simple cmake project named HelloWorld
 
 EXAMPLE OUTPUT:
-<code_interface type="write" lang="cmake" filename="HelloWorld/CMakeList.txt">
+<code_interface type="write" lang="cmake" filename="HelloWorld/CMakeList.txt">\n
 
 ```cmake
 ...
@@ -33,7 +33,7 @@ EXAMPLE OUTPUT:
 
 </code_interface>
 
-<code_interface type="write" lang="cpp" filename="HelloWorld/src/main.cpp">
+<code_interface type="write" lang="cpp" filename="HelloWorld/src/main.cpp">\n
 
 ```cpp
 ...
@@ -41,7 +41,7 @@ EXAMPLE OUTPUT:
 
 </code_interface>
 
-<code_interface type="exec" lang="bash" filename="HelloWorld/build_and_test.sh">
+<code_interface type="exec" lang="bash" filename="HelloWorld/build_and_test.sh">\n
 
 ```bash
 #!/bin/bash
@@ -71,8 +71,8 @@ make
 #### Usage Instructions
 
 - The Python code you write can incorporate a wide array of libraries, handle data manipulation or visualization, perform API calls for web-related tasks, or tackle virtually any computational challenge. Use this flexibility to **think outside the box, craft elegant solutions, and harness Python's full potential**.
-- Use the `<code_interface>` XML node and stop right away to wait for user's action.
-- Only one code block is allowd in one `<code_interface>` XML node. DO NOT use two or more markdown code blocks together.
+- Use the `<code_interface>\n` XML node and stop right away to wait for user's action.
+- Only one code block is allowd in one `<code_interface>\n` XML node. DO NOT use two or more markdown code blocks together.
 - Please do not unnecessarily remove any comments or code.
 - Always COMPLETELY IMPLEMENT the needed code. NEVER leave comments describing code without implementing it.
 - Coding style instruction:
@@ -139,7 +139,7 @@ EXAMPLE INPUT:
 For DarkSHINE, simulate and reconstruct inclusive background events
 
 EXAMPLE OUTPUT:
-<code_interface type="exec" lang="bash" filename="background_inclusive_eot.sh">
+<code_interface type="exec" lang="bash" filename="background_inclusive_eot.sh">\n
 
 ```bash
 #!/bin/bash
@@ -192,7 +192,7 @@ EXAMPLE INPUT:
 Compare varaibles of signal and background events
 
 EXAMPLE OUTPUT:
-<code_interface type="exec" lang="python" filename="compare_kinematics.py">
+<code_interface type="exec" lang="python" filename="compare_kinematics.py">\n
 
 ```python
 import ROOT
@@ -249,7 +249,7 @@ EXAMPLE INPUT:
 Optimize cut of `ECAL_E_total[0]` with 1 track cut.
 
 EXAMPLE OUTPUT:
-<code_interface type="exec" lang="python" filename="optimize_cut.py">
+<code_interface type="exec" lang="python" filename="optimize_cut.py">\n
 
 ```python
 import ROOT
